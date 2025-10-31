@@ -26,12 +26,10 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      # this is what the backend in the repo expects (Node + Postgres) :contentReference[oaicite:3]{index=3}
       DATABASE_URL: postgres://postgres:password@postgres:5432/notes_db
       PORT: 3001
       NODE_ENV: production
     ports:
-      # expose for debugging / testing from outside the VM
       - "3001:3001"
     networks:
       - app-net
@@ -40,13 +38,11 @@ services:
     build:
       context: ./frontend
       args:
-        # this will be baked into the React build
         REACT_APP_API_URL: http://backend:3001
     container_name: notes-frontend
     depends_on:
       - backend
     ports:
-      # serve app on VM port 80
       - "80:80"
     networks:
       - app-net
