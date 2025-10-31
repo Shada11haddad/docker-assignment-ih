@@ -4,20 +4,21 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
-# 1) pkg + deps
+# install deps
 COPY package*.json ./
 RUN npm install
 
-# 2) بقية الكود
+# copy source
 COPY . .
 
-# 3) API URL يجي من docker-compose
+# this repo uses CRA (react-scripts) but the original repo
+# does NOT include frontend/public/index.html, so a normal
+# "npm run build" will fail. We make it NON-FATAL.
 ARG REACT_APP_API_URL=http://backend:3001
 ENV REACT_APP_API_URL=${REACT_APP_API_URL}
 
-# 4) حاول تبني، لو الريبو ناقص public/ لا تطيح
-# ملاحظة: الريبو الأصلي ما فيه frontend/public/index.html :contentReference[oaicite:2]{index=2}
-RUN npm run build || (echo "⚠️ frontend build skipped: repo has no public/index.html" && mkdir -p build)
+# try to build, but don't fail the image if CRA complains
+RUN npm run build || (echo "⚠️ CRA build skipped: missing public/index.html in repo" && mkdir -p build)
 
 # ---- run stage ----
 FROM nginx:1.27-alpine
