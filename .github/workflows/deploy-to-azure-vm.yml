@@ -1,0 +1,63 @@
+name: CI-CD to Azure VM (three-tier)
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build-test-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) Checkout code
+      - name: Checkout
+        uses: actions/checkout@v5  # latest checkout action :contentReference[oaicite:4]{index=4}
+
+      # 2) (optional but good) run Node tests/builds in CI
+      - name: Install & test backend
+        working-directory: ./backend
+        run: |
+          npm install
+          npm test --if-present
+
+      - name: Install & test frontend
+        working-directory: ./frontend
+        run: |
+          npm install
+          npm run build --if-present
+
+      # 3) Deploy on Azure VM by SSH
+      - name: Deploy to Azure VM via SSH
+        uses: appleboy/ssh-action@v1  # robust SSH action :contentReference[oaicite:5]{index=5}
+        with:
+          host: ${{ secrets.AZURE_VM_HOST }}          # e.g. 20.xx.xx.xx
+          username: ${{ secrets.AZURE_VM_USERNAME }}  # e.g. azureuser
+          key: ${{ secrets.AZURE_VM_SSH_KEY }}        # private key content
+          port: ${{ secrets.AZURE_VM_PORT || 22 }}
+          script: |
+            set -e
+
+            # go to the app directory on the VM (you will create it in the next section)
+            cd ${{ secrets.AZURE_VM_APP_DIR }}
+
+            echo "Pulling latest code..."
+            # repo is public, so normal git pull works
+            git fetch --all
+            git reset --hard origin/main
+
+            echo "Choosing docker compose binary..."
+            if command -v docker compose >/dev/null 2>&1; then
+              DC="docker compose"
+            else
+              DC="docker-compose"
+            fi
+
+            echo "Stopping old containers (if any)..."
+            $DC down --remove-orphans || true
+
+            echo "Building and starting containers..."
+            $DC up -d --build
+
+            echo "Current containers:"
+            docker ps -a

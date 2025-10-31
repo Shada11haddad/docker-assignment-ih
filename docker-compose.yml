@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: notes-postgres
+    environment:
+      POSTGRES_DB: notes_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d notes_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    container_name: notes-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # this is what the backend in the repo expects (Node + Postgres) :contentReference[oaicite:3]{index=3}
+      DATABASE_URL: postgres://postgres:password@postgres:5432/notes_db
+      PORT: 3001
+      NODE_ENV: production
+    ports:
+      # expose for debugging / testing from outside the VM
+      - "3001:3001"
+    networks:
+      - app-net
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # this will be baked into the React build
+        REACT_APP_API_URL: http://backend:3001
+    container_name: notes-frontend
+    depends_on:
+      - backend
+    ports:
+      # serve app on VM port 80
+      - "80:80"
+    networks:
+      - app-net
+
+networks:
+  app-net:
+
+volumes:
+  pgdata:
