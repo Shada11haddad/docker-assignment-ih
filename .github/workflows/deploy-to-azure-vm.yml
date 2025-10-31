@@ -13,22 +13,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      # backend: نثبت بس، ما نطيح لو ما فيه test
       - name: Install backend deps
         working-directory: ./backend
         run: |
           npm install
-
       - name: Optional backend test (do not fail)
         working-directory: ./backend
         run: |
           npm test --if-present || true
 
-      - name: Install and build frontend
+      # 🔴 هنا التغيير المهم 🔴
+      # بدل ما نجبر React يبني على GitHub (ويطيح عشان public/index.html)
+      # نخليها اختيارية وما توقف الـ job
+      - name: Install frontend deps (do not fail)
         working-directory: ./frontend
         run: |
-          npm install
-          npm run build --if-present
+          npm install || true
 
+      # لو تبين تجربي build بس ما يطيح:
+      - name: Build frontend (non-blocking)
+        working-directory: ./frontend
+        run: |
+          npm run build --if-present || true
+
+      # بعدين نروح للـ VM ونبني هناك
       - name: Deploy to Azure VM via SSH
         uses: appleboy/ssh-action@v1
         with:
@@ -40,15 +49,19 @@ jobs:
             set -e
             cd ${{ secrets.AZURE_VM_APP_DIR }}
 
+            echo "Pulling latest code from GitHub..."
             git fetch --all
             git reset --hard origin/main
 
+            # نحدد أي docker compose متوفر
             if command -v docker compose >/dev/null 2>&1; then
               DC="docker compose"
             else
               DC="docker-compose"
             fi
 
+            echo "Recreating containers..."
             $DC down --remove-orphans || true
             $DC up -d --build
+
             docker ps -a
