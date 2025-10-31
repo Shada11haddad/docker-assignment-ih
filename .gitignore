@@ -69,8 +69,11 @@ jspm_packages/
 .nuxt
 
 # Gatsby files
-.cache/
 public
+
+# allow React public folder
+!frontend/public/
+!frontend/public/index.html
 
 # Storybook build outputs
 .out
