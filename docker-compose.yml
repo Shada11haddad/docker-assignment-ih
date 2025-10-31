@@ -1,49 +1,42 @@
 version: "3.9"
 
 services:
-  postgres:
+  notes-postgres:
     image: postgres:15
     container_name: notes-postgres
     environment:
-      POSTGRES_DB: notes_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
+      POSTGRES_DB: notes_db
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
       - app-net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d notes_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
 
-  backend:
-    build:
-      context: ./backend
+  notes-backend:
+    build: ./backend
     container_name: notes-backend
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
-      DATABASE_URL: postgres://postgres:password@postgres:5432/notes_db
-      PORT: 3001
-      NODE_ENV: production
+      - PORT=3001
+      - DATABASE_URL=postgres://postgres:password@notes-postgres:5432/notes_db
     ports:
       - "3001:3001"
+    depends_on:
+      - notes-postgres
     networks:
       - app-net
 
-  frontend:
+  notes-frontend:
     build:
       context: ./frontend
+      # IMPORTANT: build the React app to talk to the PUBLIC IP of the VM
       args:
-        REACT_APP_API_URL: http://backend:3001
+        REACT_APP_API_URL: http://20.84.51.7:3001
     container_name: notes-frontend
-    depends_on:
-      - backend
     ports:
       - "80:80"
+    depends_on:
+      - notes-backend
     networks:
       - app-net
 
