@@ -6,18 +6,42 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// allow your actual frontend on the VM
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://frontend:3000',
+  'http://172.22.0.4:3000',
+  'http://20.84.51.7',        // 👈 this is your real frontend
+];
+
 // Middleware
-app.use(cors({
-  origin: ['http://localhost:3000', 'http://frontend:3000', 'http://172.22.0.4:3000'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // allow mobile/axios/no-origin
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      // block others
+      return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
+
+// handle OPTIONS for all routes (so preflight always OK)
+app.options('*', cors());
+
 app.use(express.json());
 
 // Database connection
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/notes_db',
+  connectionString:
+    process.env.DATABASE_URL ||
+    'postgresql://postgres:password@localhost:5432/notes_db',
 });
 
 // Initialize database table
@@ -52,7 +76,9 @@ app.get('/health', (req, res) => {
 app.get('/notes', async (req, res) => {
   try {
     const client = await pool.connect();
-    const result = await client.query('SELECT * FROM notes ORDER BY created_at DESC');
+    const result = await client.query(
+      'SELECT * FROM notes ORDER BY created_at DESC'
+    );
     client.release();
     res.json(result.rows);
   } catch (err) {
@@ -65,7 +91,7 @@ app.get('/notes', async (req, res) => {
 app.post('/notes', async (req, res) => {
   try {
     const { title, content } = req.body;
-    
+
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
     }
@@ -76,7 +102,7 @@ app.post('/notes', async (req, res) => {
       [title, content || '']
     );
     client.release();
-    
+
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('Error creating note:', err);
@@ -89,13 +115,15 @@ app.get('/notes/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const client = await pool.connect();
-    const result = await client.query('SELECT * FROM notes WHERE id = $1', [id]);
+    const result = await client.query('SELECT * FROM notes WHERE id = $1', [
+      id,
+    ]);
     client.release();
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Note not found' });
     }
-    
+
     res.json(result.rows[0]);
   } catch (err) {
     console.error('Error fetching note:', err);
@@ -108,7 +136,7 @@ app.put('/notes/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { title, content } = req.body;
-    
+
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
     }
@@ -119,11 +147,11 @@ app.put('/notes/:id', async (req, res) => {
       [title, content || '', id]
     );
     client.release();
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Note not found' });
     }
-    
+
     res.json(result.rows[0]);
   } catch (err) {
     console.error('Error updating note:', err);
@@ -136,13 +164,16 @@ app.delete('/notes/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const client = await pool.connect();
-    const result = await client.query('DELETE FROM notes WHERE id = $1 RETURNING *', [id]);
+    const result = await client.query(
+      'DELETE FROM notes WHERE id = $1 RETURNING *',
+      [id]
+    );
     client.release();
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Note not found' });
     }
-    
+
     res.json({ message: 'Note deleted successfully' });
   } catch (err) {
     console.error('Error deleting note:', err);
